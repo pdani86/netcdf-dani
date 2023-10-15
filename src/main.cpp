@@ -12,6 +12,7 @@
 #include "colors.h"
 #include "gps.h"
 
+#include "bitpartition.h"
 
 void handle_error(int status) {
     std::cout << "error " << status << std::endl;
@@ -201,12 +202,9 @@ void transform_to_raw(NcFile& ncFile) {
     int elevation_var_id = ncFile.getVarIdByName("elevation");
     std::cout << "dimlen: " << dimlen[0] << " * " << dimlen[1] << std::endl;
     size_t width = dimlen[0];
-    size_t count[2];
-    count[0] = 1;
-    count[1] = width;
+    size_t count[2] = {1, width};
     std::cout << "Elevation var id: " << elevation_var_id << std::endl;
     auto rowBuf = std::vector<int16_t>(width);
-    size_t sizeDims[] = {dimlen[0], dimlen[1]};
     std::ofstream ofs("D:/out_full_16.raw", std::ios::binary);
     for(int rowIx = 0; rowIx < dimlen[1]; ++rowIx) {
         size_t start[2] = {(size_t)rowIx, 0};
@@ -216,16 +214,23 @@ void transform_to_raw(NcFile& ncFile) {
     ofs.flush();
 }
 
+
 int main() {
-    GPS hunGps1{48.64698758285766, 14.999676527732783};
-    GPS hunGps2{45.50885749858355, 23.417102803214963};
-    auto hunArea = GpsArea::fromPoints(hunGps1, hunGps2);
-    //const char* nc_datafile = "D:\\other\\data\\geo\\gebco_2023\\GEBCO_2023.nc";
-    const char* nc_datafile = "C:\\dani\\other\\GEBCO_2023.nc";
-    auto nc_file = NcFile::openForRead(nc_datafile);
+    try {
+        GPS hunGps1{48.64698758285766, 14.999676527732783};
+        GPS hunGps2{45.50885749858355, 23.417102803214963};
+        auto hunArea = GpsArea::fromPoints(hunGps1, hunGps2);
+
+        //const char* nc_datafile = "D:\\other\\data\\geo\\gebco_2023\\GEBCO_2023.nc";
+        const char *nc_datafile = "C:\\dani\\other\\GEBCO_2023.nc";
+        auto nc_file = NcFile::openForRead(nc_datafile);
 //    print_info(nc_file);
-    transform_to_raw(nc_file); return 0;
-    transform_elevation_data(nc_file);
-    crop_from_elevation_data(nc_file, hunArea);
+//    transform_to_raw(nc_file);
+        transform_to_bitpartitioned_raw(nc_file);
+//    transform_elevation_data(nc_file);
+//    crop_from_elevation_data(nc_file, hunArea);
+    } catch(const std::exception& e) {
+        std::cout << "exception: " << e.what() << std::endl;
+    }
     return 0;
 }
