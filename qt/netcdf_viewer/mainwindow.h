@@ -13,6 +13,13 @@ QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
+struct AreaData {
+    Offset2D southWestOffset;
+    int width{};
+    int height{};
+    std::unique_ptr<int16_t> data;
+};
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -37,6 +44,13 @@ public:
     QImage createOverviewImageColor();
 
     Offset2D getOverviewOffsetFromGps(const GPS& gps) const;
+
+    NcFile& getNcFile() /*const*/ {
+        if(!_ncFile.has_value()) {
+            _ncFile = NcFile::openForRead(_ncFilename.c_str());
+        }
+        return _ncFile.value();
+    }
 
 private slots:
     void on_heightMin_sliderMoved(int position);
@@ -81,6 +95,8 @@ private:
 
     const std::string _ncFilename = "D:\\data\\geo\\gebco_2023\\GEBCO_2023.nc";
     const std::string _elevationVarName = "elevation";
+
+    std::optional<NcFile> _ncFile;
 };
 
 #endif // MAINWINDOW_H

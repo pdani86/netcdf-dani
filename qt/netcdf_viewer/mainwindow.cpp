@@ -105,7 +105,7 @@ QImage MainWindow::createAreaImageGray() {
     int16_t height_min = ui->heightMin->value();
     int16_t height_max = ui->heightMax->value();
 
-    auto ncFile = NcFile::openForRead(_ncFilename.c_str());
+    auto& ncFile = getNcFile();
     auto varId = ncFile.getVarIdByName(_elevationVarName.c_str());
 
     auto dataCols = ncFile.dims().at(0);
@@ -168,7 +168,7 @@ QImage MainWindow::createAreaImageColor() {
     int16_t height_min = ui->heightMin->value();
     int16_t height_max = ui->heightMax->value();
 
-    auto ncFile = NcFile::openForRead(_ncFilename.c_str());
+    auto& ncFile = getNcFile();
     auto varId = ncFile.getVarIdByName(_elevationVarName.c_str());
 
     auto dataCols = ncFile.dims().at(0);
