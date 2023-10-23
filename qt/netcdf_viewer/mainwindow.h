@@ -17,7 +17,7 @@ struct AreaData {
     Offset2D southWestOffset;
     int width{};
     int height{};
-    std::unique_ptr<int16_t> data;
+    std::unique_ptr<int16_t[]> data;
 };
 
 class MainWindow : public QMainWindow
@@ -43,7 +43,12 @@ public:
     QImage createAreaImageColor();
     QImage createOverviewImageColor();
 
+    AreaData getDataForCenter(GPS gpsCenter, int width, int height);
+
     Offset2D getOverviewOffsetFromGps(const GPS& gps) const;
+
+    QImage createGrayImageFromAreaData(const AreaData& areaData);
+    QImage createColorImageFromAreaData(const AreaData& areaData);
 
     NcFile& getNcFile() /*const*/ {
         if(!_ncFile.has_value()) {

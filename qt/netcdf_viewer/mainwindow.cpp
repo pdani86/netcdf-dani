@@ -94,46 +94,14 @@ QColor MainWindow::heightToColor(int16_t height, int16_t min, int16_t max) {
 }
 
 QImage MainWindow::createAreaImageGray() {
+
     GPS gpsCenter{ui->latitudeSlider->value() / 1000.0, ui->longitudeSlider->value() / 1000.0};
+
     const int w = _areaImageWidth;
     const int h = _areaImageHeight;
 
-    QImage img(w, h, QImage::Format_Grayscale8);
-    uint8_t* row = img.bits();
-    size_t bytesPerLine = img.bytesPerLine();
-
-    int16_t height_min = ui->heightMin->value();
-    int16_t height_max = ui->heightMax->value();
-
-    auto& ncFile = getNcFile();
-    auto varId = ncFile.getVarIdByName(_elevationVarName.c_str());
-
-    auto dataCols = ncFile.dims().at(0);
-    auto dataRows = ncFile.dims().at(1);
-
-    double stepPerDegree = dataCols / 360.0;
-    GpsToOffsetConverter converter(stepPerDegree, dataRows/2, dataCols/2);
-
-    auto offsetCenter = converter.convert(gpsCenter);
-    auto offset = offsetCenter; // south-west corner
-    offset.latLon[0] += h/2;
-    offset.latLon[1] -= w/2;
-
-    size_t offsets[] = {offset.latLon[0], offset.latLon[1]};
-    size_t counts[] = {1, (size_t)w};
-    std::vector<int16_t> rowBuf;
-    rowBuf.resize(w);
-
-    for(int y = 0; y < h; ++y, row += bytesPerLine, --offsets[0]) {
-        ncFile.getInt64Data(rowBuf.data(), varId, offsets, counts);
-        for(int x = 0; x < w; ++x) {
-            int16_t srcVal = rowBuf[x];
-            auto value = heightToGray(srcVal, height_min, height_max);
-//            if(isInArea) {value /= 2;}
-            row[x] = value;
-        }
-    }
-    return img;
+    auto areaData = getDataForCenter(gpsCenter, w, h);
+    return createGrayImageFromAreaData(areaData);
 }
 
 QImage MainWindow::createOverviewImageGray() {
@@ -160,44 +128,7 @@ QImage MainWindow::createAreaImageColor() {
     GPS gpsCenter{ui->latitudeSlider->value() / 1000.0, ui->longitudeSlider->value() / 1000.0};
     const int w = _areaImageWidth;
     const int h = _areaImageHeight;
-
-    QImage img(w, h, QImage::Format_RGB888);
-    uint8_t* row = img.bits();
-    size_t bytesPerLine = img.bytesPerLine();
-
-    int16_t height_min = ui->heightMin->value();
-    int16_t height_max = ui->heightMax->value();
-
-    auto& ncFile = getNcFile();
-    auto varId = ncFile.getVarIdByName(_elevationVarName.c_str());
-
-    auto dataCols = ncFile.dims().at(0);
-    auto dataRows = ncFile.dims().at(1);
-
-    double stepPerDegree = dataCols / 360.0;
-    GpsToOffsetConverter converter(stepPerDegree, dataRows/2, dataCols/2);
-
-    auto offsetCenter = converter.convert(gpsCenter);
-    auto offset = offsetCenter; // south-west corner
-    offset.latLon[0] += h/2;
-    offset.latLon[1] -= w/2;
-
-    size_t offsets[] = {offset.latLon[0], offset.latLon[1]};
-    size_t counts[] = {1, (size_t)w};
-    std::vector<int16_t> rowBuf;
-    rowBuf.resize(w);
-
-    for(int y = 0; y < h; ++y, row += bytesPerLine, --offsets[0]) {
-        ncFile.getInt64Data(rowBuf.data(), varId, offsets, counts);
-        for(int x = 0; x < w; ++x) {
-            int16_t srcVal = rowBuf[x];
-            auto value = heightToColor(srcVal, height_min, height_max);
-            row[3*x] = value.red();
-            row[3*x+1] = value.green();
-            row[3*x+2] = value.blue();
-        }
-    }
-    return img;
+    return createColorImageFromAreaData(getDataForCenter(gpsCenter, w, h));
 }
 
 QImage MainWindow::createOverviewImageColor() {
@@ -217,6 +148,84 @@ QImage MainWindow::createOverviewImageColor() {
             row[3*x] = value.red();
             row[3*x+1] = value.green();
             row[3*x+2] = value.blue();
+        }
+    }
+    return img;
+}
+
+AreaData MainWindow::getDataForCenter(GPS gpsCenter, int width, int height) {
+    AreaData result;
+    result.width = width;
+    result.height= height;
+
+    auto& ncFile = getNcFile();
+    auto varId = ncFile.getVarIdByName(_elevationVarName.c_str());
+
+    auto dataCols = ncFile.dims().at(0);
+    auto dataRows = ncFile.dims().at(1);
+
+    double stepPerDegree = dataCols / 360.0;
+    GpsToOffsetConverter converter(stepPerDegree, dataRows/2, dataCols/2);
+
+    auto offsetCenter = converter.convert(gpsCenter);
+    auto offset = offsetCenter; // south-west corner
+    offset.latLon[0] -= height/2;
+    offset.latLon[1] -= width/2;
+    result.southWestOffset = offset;
+
+    size_t offsets[] = {offset.latLon[0], offset.latLon[1]};
+    size_t counts[] = {(size_t)height, (size_t)width};
+
+    auto bufSize = counts[0] * counts[1];
+    result.data = std::make_unique<int16_t[]>(bufSize);
+    ncFile.getInt64Data(result.data.get(), varId, offsets, counts);
+
+    return result;
+}
+
+QImage MainWindow::createColorImageFromAreaData(const AreaData& areaData) {
+    const int w = areaData.width;
+    const int h = areaData.height;
+    QImage img(w, h, QImage::Format_RGB888);
+    uint8_t* row = img.bits();
+    size_t bytesPerLine = img.bytesPerLine();
+
+    int16_t height_min = ui->heightMin->value();
+    int16_t height_max = ui->heightMax->value();
+
+    auto srcLinestep = w;
+    auto* srcRow = areaData.data.get() + srcLinestep * (areaData.height - 1);
+
+    for(int y = 0; y < h; ++y, row += bytesPerLine, srcRow -= srcLinestep) {
+        for(int x = 0; x < w; ++x) {
+            int16_t srcVal = srcRow[x];
+            auto value = heightToColor(srcVal, height_min, height_max);
+            row[3*x] = value.red();
+            row[3*x+1] = value.green();
+            row[3*x+2] = value.blue();
+        }
+    }
+    return img;
+}
+
+QImage MainWindow::createGrayImageFromAreaData(const AreaData& areaData) {
+    auto w = areaData.width;
+    auto h = areaData.height;
+    QImage img(w, h, QImage::Format_Grayscale8);
+    uint8_t* row = img.bits();
+    size_t bytesPerLine = img.bytesPerLine();
+
+    int16_t height_min = ui->heightMin->value();
+    int16_t height_max = ui->heightMax->value();
+
+    auto srcLinestep = w;
+    auto* srcRow = areaData.data.get() + srcLinestep * (areaData.height - 1);
+
+    for(int y = 0; y < h; ++y, row += bytesPerLine, srcRow -= srcLinestep) {
+        for(int x = 0; x < w; ++x) {
+            int16_t srcVal = srcRow[x];
+            auto value = heightToGray(srcVal, height_min, height_max);
+            row[x] = value;
         }
     }
     return img;
