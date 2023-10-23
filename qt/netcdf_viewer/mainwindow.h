@@ -57,6 +57,8 @@ public:
         return _ncFile.value();
     }
 
+    bool shouldShowEdges() const;
+
 private slots:
     void on_heightMin_sliderMoved(int position);
 
@@ -81,6 +83,8 @@ private slots:
     void on_brownLimit_valueChanged(int value);
 
     void on_graphicsview_mouse_clicked(int x, int y);
+
+    void on_edges_toggled(bool checked);
 
 private:
     Ui::MainWindow *ui;

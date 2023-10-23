@@ -31,6 +31,10 @@ MainWindow::MainWindow(QWidget *parent)
     update();
 }
 
+bool MainWindow::shouldShowEdges() const {
+    return ui->edges->isChecked();
+}
+
 void MainWindow::on_graphicsview_mouse_clicked(int x, int y) {
 //    std::cout << "mouse click pos: " << x << ", " << y << std::endl;
     if(_areaMode) {
@@ -205,6 +209,34 @@ QImage MainWindow::createColorImageFromAreaData(const AreaData& areaData) {
             row[3*x+2] = value.blue();
         }
     }
+
+
+
+    if(shouldShowEdges()) {
+        auto meterPerPixel = 40'000'000.0 / 86'400.0; // on equator
+        double maxGrad = 0.025;
+        auto maxHeightDiff = meterPerPixel * maxGrad;
+        auto* imgData = img.bits();
+        auto* srcData = areaData.data.get();
+        auto imgLinestep = img.bytesPerLine();
+        for(int y = 1; y < h-1; ++y) {
+            for(int x = 1; x < w-1; ++x) {
+                auto srcOffset = y*srcLinestep + x;
+                auto dx = std::abs(srcData[srcOffset + 1] - srcData[srcOffset]);
+                auto dy = std::abs(srcData[srcOffset + srcLinestep] - srcData[srcOffset]);
+                auto maxDelta = std::max(dx, dy);
+
+                auto dstPixOffset = (h-1-y) * imgLinestep + 3*x;
+                auto oldVal = imgData[dstPixOffset];
+                imgData[dstPixOffset] = std::clamp(oldVal + (int)(maxDelta * 10.0), 0, 255);
+                /*if(maxDelta > maxHeightDiff) {
+                    imgData[y * imgLinestep + 3 * x] = 255;
+                }*/
+            }
+        }
+    }
+
+
     return img;
 }
 
@@ -228,6 +260,35 @@ QImage MainWindow::createGrayImageFromAreaData(const AreaData& areaData) {
             row[x] = value;
         }
     }
+
+
+
+    if(shouldShowEdges()) {
+        auto meterPerPixel = 40'000'000.0 / 86'400.0; // on equator
+        double maxGrad = 0.025;
+        auto maxHeightDiff = meterPerPixel * maxGrad;
+        auto* imgData = img.bits();
+        auto* srcData = areaData.data.get();
+        auto imgLinestep = img.bytesPerLine();
+        for(int y = 1; y < h-1; ++y) {
+            for(int x = 1; x < w-1; ++x) {
+                auto srcOffset = y*srcLinestep + x;
+                auto dx = std::abs(srcData[srcOffset + 1] - srcData[srcOffset]);
+                auto dy = std::abs(srcData[srcOffset + srcLinestep] - srcData[srcOffset]);
+                auto maxDelta = std::max(dx, dy);
+                auto dstPixOffset = (h-1-y) * imgLinestep + x;
+                auto oldVal = imgData[dstPixOffset];
+                imgData[dstPixOffset] = std::clamp(oldVal + (int)(maxDelta * 3.0), 0, 255);
+//                if(maxDelta > maxHeightDiff) {
+//                    imgData[y * imgLinestep + x] = 255;
+//                }
+            }
+        }
+    }
+
+
+
+
     return img;
 }
 
@@ -354,6 +415,12 @@ void MainWindow::on_greenLimit_valueChanged(int value)
 void MainWindow::on_brownLimit_valueChanged(int value)
 {
     _brownLimit = value;
+    update();
+}
+
+
+void MainWindow::on_edges_toggled(bool checked)
+{
     update();
 }
 
